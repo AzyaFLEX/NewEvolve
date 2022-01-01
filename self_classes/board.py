@@ -47,12 +47,12 @@ class Board:
                     run = False
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        self.create_new_cell(event.pos[0] // self.cell_size,
-                                             event.pos[1] // self.cell_size)
+                        self.create_new_cell(event.pos[1] // self.cell_size,
+                                             event.pos[0] // self.cell_size)
             self.update()
             self.render(screen)
 
-    def create_new_cell(self, x, y, code=None):
+    def create_new_cell(self, y, x, code=None):
         self.last_cell_id += 1
         self.object_dict[self.last_cell_id] = self_classes.cell.Cell(self, x, y, code)
         self.matrix[y, x] = self.last_cell_id

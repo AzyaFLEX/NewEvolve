@@ -17,7 +17,7 @@ the_dict_of_life = {
 class Cell:
     def __init__(self, world, x, y, code=None):
         if code is None:
-            code = [0 for _ in range(31)] + [5]
+            code = [5 for _ in range(31)] + [5]
         self.world = world
         self.x, self.y = x, y
         self.code = code
@@ -34,7 +34,8 @@ class Cell:
         result = []
         for i in range(self.y - 1, self.y + 2):
             if i >= 0:
-                result += [[[j, i] for j in range(self.x - 1, self.x + 2)]]
+                result += [[[i if i < self.world.cells_y else 0, j if j < self.world.cells_x else 0]
+                            for j in range(self.x - 1, self.x + 2)]]
         return result
 
     def photosynthesis(self):
@@ -49,5 +50,6 @@ class Cell:
             for elm in row:
                 if self.world.matrix[elm[0], elm[1]] == 0:
                     result += [elm]
-        random_cell = choice(result)
-        self.world.create_new_cell(*random_cell)
+        if result:
+            random_cell = choice(result)
+            self.world.create_new_cell(*random_cell)
