@@ -17,13 +17,32 @@ the_dict_of_life = {
 class Cell:
     def __init__(self, world, x, y, code=None):
         if code is None:
-            code = [5 for _ in range(31)] + [5]
+            code = [randint(1, 4) for _ in range(31)] + [5]
         self.world = world
         self.x, self.y = x, y
         self.code = code
         self.energy = 500
         self.current = 0
         self.mineral = 0
+
+    def __str__(self):
+        return f'Cell with coords {self.y, self.x}'
+
+    def __repr__(self):
+        return self.__str__()
+
+    # The basic principle of moving cells on my board
+    def correct_pos(self, data):
+        y, x = data
+        if x < 0:
+            x = self.world.cells_x - 1
+        elif x == self.world.cells_x:
+            x = 0
+        if y < 0:
+            y = 0
+        elif y == self.world.cells_y:
+            y = self.world.cells_y - 1
+        return y, x
 
     def do(self):
         exec(the_dict_of_life[self.code[self.current]])
@@ -42,7 +61,11 @@ class Cell:
         self.energy += 20
 
     def move(self, way):
-        pass
+        old_pos = (self.y, self.x)
+        new_pos = self.correct_pos((self.y + way[1], self.x + way[0]))
+        if not self.world.matrix[new_pos[0], new_pos[1]]:
+            self.y, self.x = new_pos
+            self.world.move_cell(old_pos, new_pos)
 
     def create_new_cell(self):
         variats, result = self.cells_around(), []
@@ -51,5 +74,5 @@ class Cell:
                 if self.world.matrix[elm[0], elm[1]] == 0:
                     result += [elm]
         if result:
-            random_cell = choice(result)
+            random_cell = self.correct_pos(choice(result))
             self.world.create_new_cell(*random_cell)

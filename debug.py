@@ -4,6 +4,6 @@ def time_test(old_func):
         time1 = datetime.datetime.now()
         result = old_func(*args, **kwargs)
         time2 = datetime.datetime.now()
-        print(time2 - time1)
+        print(f'{old_func.__name__} duration: {time2 - time1}')
         return result
     return new_func
