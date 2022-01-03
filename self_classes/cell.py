@@ -1,5 +1,6 @@
 from random import randint, choice
 from self_classes.board import Board
+import configparser
 from debug import *
 import numpy
 
@@ -14,14 +15,21 @@ the_dict_of_life = {
 }
 
 
+def get_config_int(config, request):
+    return int(config[request])
+
+
 class Cell:
     def __init__(self, world, x, y, code=None):
         if code is None:
-            code = [randint(1, 4) for _ in range(31)] + [5]
+            code = [randint(0, 4) for _ in range(31)] + [5]
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        self.config = config['Cell']
         self.world = world
         self.x, self.y = x, y
         self.code = code
-        self.energy = 500
+        self.energy = 100000 #get_config_int(self.config, 'base_energy')
         self.current = 0
         self.mineral = 0
 
@@ -44,9 +52,19 @@ class Cell:
             y = self.world.cells_y - 1
         return y, x
 
+    def check_death(self):
+        if self.energy <= 0:
+            self.death()
+            return True
+        return False
+
+    def death(self):
+        self.world.cell_dead(self)
+
     def do(self):
         exec(the_dict_of_life[self.code[self.current]])
-        self.energy -= 15
+        self.energy -= get_config_int(self.config, 'move_cost')
+        self.check_death()
         self.current = (self.current + 1) % len(self.code)
 
     def cells_around(self):
@@ -58,7 +76,7 @@ class Cell:
         return result
 
     def photosynthesis(self):
-        self.energy += 20
+        self.energy += get_config_int(self.config, 'photosynthesis')
 
     def move(self, way):
         old_pos = (self.y, self.x)
@@ -74,5 +92,10 @@ class Cell:
                 if self.world.matrix[elm[0], elm[1]] == 0:
                     result += [elm]
         if result:
+            self.energy -= get_config_int(self.config, 'create_new_cell_cost')
+            if self.check_death():
+                return
             random_cell = self.correct_pos(choice(result))
             self.world.create_new_cell(*random_cell)
+        else:
+            self.death()
