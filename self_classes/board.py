@@ -1,5 +1,8 @@
+from pygame.locals import *
 import self_classes
 from debug import *
+import datetime
+import random
 import pygame
 import numpy
 
@@ -16,6 +19,9 @@ class Board:
         self.object_dict = {}
         self.last_cell_id = 0
         self.is_world_stopped = False
+        '''[optimization dict]'''
+        self.cash_coords_around = {}
+        self.right_pos = {}
 
     def __str__(self):
         return f'{self.matrix}'
@@ -50,9 +56,13 @@ class Board:
         pygame.display.flip()
 
     def run(self):
-        screen = pygame.display.set_mode((self.width, self.height))
+        pygame.init()
+        flags = DOUBLEBUF
+        screen = pygame.display.set_mode((self.width, self.height), flags)
+        screen.set_alpha(None)
         run = True
         while run:
+            time1 = datetime.datetime.now()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     run = False
@@ -71,10 +81,14 @@ class Board:
             if not self.is_world_stopped:
                 self.update()
                 self.render(screen)
+                time2 = datetime.datetime.now()
+                pygame.display.set_caption(f'fps: {1 / ((time2 - time1).microseconds / 1000000)}')
 
     def create_new_cell(self, y, x, code=None):
         if not self.matrix[y, x]:
             self.last_cell_id += 1
+            if code and random.randint(1, 100) <= 17:
+                code[random.randint(0, 31)] = random.randint(0, 5)
             self.object_dict[self.last_cell_id] = self_classes.cell.Cell(self, x, y, code)
             self.matrix[y, x] = self.last_cell_id
 
