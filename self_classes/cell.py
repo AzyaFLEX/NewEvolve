@@ -5,16 +5,6 @@ from debug import *
 import numpy
 
 
-the_dict_of_life = {
-    0: 'self.photosynthesis()',
-    1: 'self.move((1, 0))',
-    2: 'self.move((-1, 0))',
-    3: 'self.move((0, 1))',
-    4: 'self.move((0, -1))',
-    5: 'self.create_new_cell()'
-}
-
-
 def get_config_int(config, request):
     return int(config[request])
 
@@ -23,21 +13,45 @@ class Cell:
     def __init__(self, world, x, y, code=None):
         if code is None:
             code = [randint(0, 4) for _ in range(31)] + [5]
+
+        """[self.cell config params]"""
         config = configparser.ConfigParser()
         config.read('config.ini')
         self.config = config['Cell']
+        self.move_cost = get_config_int(self.config, 'move_cost')
+        self.photosynthesis_energy = get_config_int(self.config, 'photosynthesis')
+        self.create_energy = get_config_int(self.config, 'create_new_cell_cost')
+        base_energy = get_config_int(self.config, 'base_energy')
+
+        """[self.cell main params]"""
         self.world = world
         self.x, self.y = x, y
+        self.alive = True
         self.code = code
-        self.energy = 100000 #get_config_int(self.config, 'base_energy')
+
+        """[self.cell resources]"""
+        self.energy = 2000
         self.current = 0
         self.mineral = 0
+
+        """[self.cell code dict]"""
+        self.the_dict_of_life = {
+            0: 'self.photosynthesis()',
+            1: 'self.move((1, 0))',
+            2: 'self.move((-1, 0))',
+            3: 'self.move((0, 1))',
+            4: 'self.move((0, -1))',
+            5: 'self.create_new_cell()'
+        }
 
     def __str__(self):
         return f'Cell with coords {self.y, self.x}'
 
     def __repr__(self):
         return self.__str__()
+
+    def __bool__(self):
+        return self.alive
 
     # The basic principle of moving cells on my board
     def correct_pos(self, data):
@@ -59,11 +73,13 @@ class Cell:
         return False
 
     def death(self):
-        self.world.cell_dead(self)
+        self.alive = False
+        self.code = [3]
+        self.current = 0
 
     def do(self):
-        exec(the_dict_of_life[self.code[self.current]])
-        self.energy -= get_config_int(self.config, 'move_cost')
+        exec(self.the_dict_of_life[self.code[self.current]])
+        self.energy -= self.move_cost
         self.check_death()
         self.current = (self.current + 1) % len(self.code)
 
@@ -76,7 +92,7 @@ class Cell:
         return result
 
     def photosynthesis(self):
-        self.energy += get_config_int(self.config, 'photosynthesis')
+        self.energy += self.photosynthesis_energy
 
     def move(self, way):
         old_pos = (self.y, self.x)
@@ -92,7 +108,7 @@ class Cell:
                 if self.world.matrix[elm[0], elm[1]] == 0:
                     result += [elm]
         if result:
-            self.energy -= get_config_int(self.config, 'create_new_cell_cost')
+            self.energy -= self.create_energy
             if self.check_death():
                 return
             random_cell = self.correct_pos(choice(result))
