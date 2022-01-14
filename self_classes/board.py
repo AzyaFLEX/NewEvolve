@@ -61,6 +61,7 @@ class Board:
         screen = pygame.display.set_mode((self.width, self.height), flags)
         screen.set_alpha(None)
         run = True
+        clock = pygame.time.Clock()
         while run:
             time1 = datetime.datetime.now()
             for event in pygame.event.get():
@@ -80,9 +81,10 @@ class Board:
                     self.is_world_stopped = not self.is_world_stopped
             if not self.is_world_stopped:
                 self.update()
+                clock.tick(30)
                 self.render(screen)
                 time2 = datetime.datetime.now()
-                pygame.display.set_caption(f'fps: {1 / ((time2 - time1).microseconds / 1000000)}')
+                pygame.display.set_caption(f'fps: {round(1 / ((time2 - time1).microseconds / 1000000))}')
 
     def create_new_cell(self, y, x, code=None):
         if not self.matrix[y, x]:
