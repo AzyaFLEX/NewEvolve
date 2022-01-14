@@ -1,5 +1,6 @@
 from random import randint, choice
 from self_classes.board import Board
+from numba import prange, njit
 import configparser
 from debug import *
 import op_tools
@@ -11,9 +12,9 @@ def get_config_int(config, request):
 
 
 class Cell:
-    def __init__(self, world, x, y, code=None):
+    def __init__(self, world, id, x, y, code=None):
         if code is None:
-            code = [0 for _ in range(32)]
+            code = [0 for _ in prange(32)]
 
         """[self.cell config params]"""
         config = configparser.ConfigParser()
@@ -26,6 +27,7 @@ class Cell:
         base_energy = get_config_int(self.config, 'base_energy')
 
         """[self.cell main params]"""
+        self.id = id
         self.world = world
         self.x, self.y = x, y
         self.alive = True
@@ -43,13 +45,26 @@ class Cell:
             2: 'self.move((-1, 0))',
             3: 'self.move((0, 1))',
             4: 'self.move((0, -1))',
+            5: 'self.move((1, 1))',
+            6: 'self.move((1, -1))',
+            7: 'self.move((-1, 1))',
+            8: 'self.move((-1, -1))',
+            9: 'self.eat((1, 0))',
+            10: 'self.eat((-1, 0))',
+            11: 'self.eat((0, 1))',
+            12: 'self.eat((0, -1))',
+            13: 'self.eat((1, 1))',
+            14: 'self.eat((1, -1))',
+            15: 'self.eat((-1, 1))',
+            16: 'self.eat((-1, -1))',
+            17: 'self.eat()',
         }
 
     def __str__(self):
-        return f'{"Cell" if self.alive else "Organic"} with coords {self.y, self.x}'
+        return f'{"Cell" if self.alive else "Organic"} with coords {self.y, self.x}\nCode: {self.code}'
 
     def __repr__(self):
-        return self.__str__()
+        return f'[{self.id}]'
 
     def __bool__(self):
         return self.alive
@@ -95,17 +110,37 @@ class Cell:
             self.current = (self.current + 1) % len(self.code)
 
     def cells_around(self):
-        if (self.y, self.x) not in self.world.cash_coords_around:
-            result = []
-            for i in range(self.y - 1, self.y + 2):
-                if i >= 0:
-                    result += [[[i if i < self.world.cells_y else 0, j if j < self.world.cells_x else 0]
-                                for j in range(self.x - 1, self.x + 2)]]
-            self.world.cash_coords_around[(self.y, self.x)] = result
-        return self.world.cash_coords_around[(self.y, self.x)]
+        result = []
+        for i in prange(self.y - 1, self.y + 2):
+            if i >= 0:
+                pre_res = []
+                for j in prange(self.x - 1, self.x + 2):
+                    if i < self.world.cells_y:
+                        pre_res += [[i, j if j < self.world.cells_x else 0]]
+                result += [pre_res]
+        return result
+
+    def cells_to_eat_around(self):
+        cells_around = self.cells_around()
+        result = []
+        for row in cells_around:
+            for elm in row:
+                if self.world.matrix[elm[0], elm[1]] not in {0, self.id}:
+                    result += [elm]
+        return result
 
     def photosynthesis(self):
         self.energy += self.photosynthesis_energy
+
+    def eat(self, way: tuple = None):
+        if way is None:
+            around = self.cells_to_eat_around()
+            if around:
+                self.energy += self.world.kill(choice(around))
+        else:
+            obj_id = self.world.matrix[self.correct_pos((self.y + way[0], self.x + way[1]))]
+            if obj_id:
+                self.energy += self.world.kill(self.correct_pos((self.y + way[0], self.x + way[1])))
 
     def move(self, way):
         old_pos = (self.y, self.x)
