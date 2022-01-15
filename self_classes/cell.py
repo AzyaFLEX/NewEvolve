@@ -24,7 +24,7 @@ class Cell:
         self.photosynthesis_energy = get_config_int(self.config, 'photosynthesis')
         self.create_energy = get_config_int(self.config, 'create_new_cell_cost')
         self.organic_decomposition_time = get_config_int(self.config, 'organic_decomposition_time')
-        base_energy = get_config_int(self.config, 'base_energy')
+        self.base_energy = get_config_int(self.config, 'base_energy')
 
         """[self.cell main params]"""
         self.id = id
@@ -34,7 +34,7 @@ class Cell:
         self.code = code
 
         """[self.cell resources]"""
-        self.energy = base_energy
+        self.energy = self.base_energy
         self.current = 0
         self.mineral = 0
 
@@ -58,6 +58,9 @@ class Cell:
             15: 'self.eat((-1, 1))',
             16: 'self.eat((-1, -1))',
             17: 'self.eat()',
+            18: 'self.eat_organic()',
+            19: 'self.is_organic_near()',
+            20: 'self.is_organic_near(reverse=True)',
         }
 
     def __str__(self):
@@ -129,6 +132,13 @@ class Cell:
                     result += [elm]
         return result
 
+    def get_organic_near(self):
+        variants = []
+        for coords in self.cells_to_eat_around():
+            if not self.world.object_dict[self.world.get_id(coords)]:
+                variants += [coords]
+        return variants
+
     def photosynthesis(self):
         self.energy += self.photosynthesis_energy
 
@@ -141,6 +151,12 @@ class Cell:
             obj_id = self.world.matrix[self.correct_pos((self.y + way[0], self.x + way[1]))]
             if obj_id:
                 self.energy += self.world.kill(self.correct_pos((self.y + way[0], self.x + way[1])))
+
+    def eat_organic(self):
+        variants = self.get_organic_near()
+        if variants:
+            self.world.kill(choice(variants))
+            self.energy += self.base_energy * 0.8
 
     def move(self, way):
         old_pos = (self.y, self.x)
@@ -163,3 +179,8 @@ class Cell:
             self.world.create_new_cell(*random_cell, self.code[:])
         else:
             self.death()
+
+    def is_organic_near(self, reverse=False):
+        task = not self.get_organic_near()
+        if task if not reverse else not task:
+            self.current += 1
