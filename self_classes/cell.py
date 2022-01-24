@@ -1,14 +1,18 @@
-from random import randint, choice
 from self_classes.board import Board
+from random import randint, choice
+from math import radians, sin, cos
 from numba import prange, njit
 import configparser
-from debug import *
-import op_tools
-import numpy
 
 
 def get_config_int(config, request):
     return int(config[request])
+
+
+def find_by_key(dict_: dict, value: str):
+    for key, _value in dict_.items():
+        if _value == value:
+            return key
 
 
 class Cell:
@@ -30,6 +34,7 @@ class Cell:
         self.id = id
         self.world = world
         self.x, self.y = x, y
+        self.way = tuple([choice((-1, 1)) for _ in range(2)])
         self.alive = True
         self.code = code
 
@@ -41,30 +46,26 @@ class Cell:
         """[self.cell code dict]"""
         self.the_dict_of_life = {
             0: 'self.photosynthesis()',
-            1: 'self.move((1, 0))',
-            2: 'self.move((-1, 0))',
-            3: 'self.move((0, 1))',
-            4: 'self.move((0, -1))',
-            5: 'self.move((1, 1))',
-            6: 'self.move((1, -1))',
-            7: 'self.move((-1, 1))',
-            8: 'self.move((-1, -1))',
-            9: 'self.eat((1, 0))',
-            10: 'self.eat((-1, 0))',
-            11: 'self.eat((0, 1))',
-            12: 'self.eat((0, -1))',
-            13: 'self.eat((1, 1))',
-            14: 'self.eat((1, -1))',
-            15: 'self.eat((-1, 1))',
-            16: 'self.eat((-1, -1))',
-            17: 'self.eat()',
-            18: 'self.eat_organic()',
-            19: 'self.is_organic_near()',
-            20: 'self.is_organic_near(reverse=True)',
+            1: 'self.eat(with_way=False)',
+            2: 'self.eat()',
+            3: 'self.move()',
+            4: 'self.change_way()',
+            5: 'self.change_way(reverse=True)',
+            6: 'self.change_way_abs()',
+            7: 'self.change_way_abs(reverse=True)',
+            8: 'self.look_for_cells_around()',
+            9: 'self.look_for_free_place_around()',
+            10: 'self.eat_organic()',
+            11: 'self.is_organic_near()',
+            12: 'self.is_organic_near(reverse=True)',
         }
 
+        self.code_for_death = find_by_key(self.the_dict_of_life, 'self.move()')
+
     def __str__(self):
-        return f'{"Cell" if self.alive else "Organic"} with coords {self.y, self.x}\nCode: {self.code}'
+        return f'''{"Cell" if self.alive else "Organic"} with coords {self.y, self.x}
+        Way: {self.way}
+        Code: {self.code}'''
 
     def __repr__(self):
         return f'[{self.id}]'
@@ -87,6 +88,34 @@ class Cell:
             self.world.right_pos[tuple(data)] = (y, x)
         return self.world.right_pos[tuple(data)]
 
+    def change_way(self, angle=45, reverse=False, abs_=False):
+        x, y = self.way if not abs_ else (0, 1)
+        angle = radians(angle) * (1 if reverse else -1)
+        self.way = round(x * cos(angle) - y * sin(angle)), round(x * sin(angle) + y * cos(angle))
+
+    def change_way_abs(self, reverse=False):
+        next_code = self.code[(self.current + 1) % len(self.code)]
+        self.change_way(angle=45 * next_code % 8, reverse=reverse, abs_=True)
+
+    def look_for_cells_around(self, free=False):
+        def correct_way(way):
+            result = []
+            for elm in way:
+                if elm > 1:
+                    elm = 1
+                if elm < -1:
+                    elm = -1
+                result += [elm]
+            return tuple(result)
+
+        around = self.cells_to_eat_around(free=free)
+        if around:
+            any_ = choice(around)
+            self.way = correct_way((any_[1] - self.x, any_[0] - self.y))
+
+    def look_for_free_place_around(self):
+        self.look_for_cells_around(free=True)
+
     def check_death(self):
         if self.energy <= 0:
             self.death()
@@ -95,7 +124,8 @@ class Cell:
 
     def death(self):
         self.alive = False
-        self.code = [3]
+        self.way = (0, -1)
+        self.code = [self.code_for_death]
         self.current = 0
         self.energy = 0
 
@@ -104,7 +134,8 @@ class Cell:
             self.create_new_cell()
             return
         try:
-            exec(self.the_dict_of_life[self.code[self.current]])
+            if self.alive or self.y != self.world.cells_y - 1:
+                exec(self.the_dict_of_life[self.code[self.current]])
         except KeyError:
             pass
         if self.alive:
@@ -123,13 +154,19 @@ class Cell:
                 result += [pre_res]
         return result
 
-    def cells_to_eat_around(self):
+    def cells_to_eat_around(self, free=False):
         cells_around = self.cells_around()
         result = []
-        for row in cells_around:
-            for elm in row:
-                if self.world.matrix[elm[0], elm[1]] not in {0, self.id}:
-                    result += [elm]
+        if not free:
+            for row in cells_around:
+                for elm in row:
+                    if self.world.matrix[elm[0], elm[1]] not in {0, self.id}:
+                        result += [elm]
+        else:
+            for row in cells_around:
+                for elm in row:
+                    if self.world.matrix[elm[0], elm[1]] == 0:
+                        result += [elm]
         return result
 
     def get_organic_near(self):
@@ -142,15 +179,17 @@ class Cell:
     def photosynthesis(self):
         self.energy += self.photosynthesis_energy
 
-    def eat(self, way: tuple = None):
-        if way is None:
+    def eat(self, with_way=False):
+        if not with_way:
+            self.energy -= self.move_cost // 4
             around = self.cells_to_eat_around()
             if around:
                 self.energy += self.world.kill(choice(around))
         else:
-            obj_id = self.world.matrix[self.correct_pos((self.y + way[0], self.x + way[1]))]
+            first, second = (self.correct_pos((self.y - self.way[1], self.x + self.way[0])))
+            obj_id = self.world.matrix[first, second]
             if obj_id:
-                self.energy += self.world.kill(self.correct_pos((self.y + way[0], self.x + way[1])))
+                self.energy += self.world.kill(first, second)
 
     def eat_organic(self):
         variants = self.get_organic_near()
@@ -158,12 +197,15 @@ class Cell:
             self.world.kill(choice(variants))
             self.energy += self.base_energy * 0.8
 
-    def move(self, way):
+    def move(self):
         old_pos = (self.y, self.x)
-        new_pos = self.correct_pos((self.y + way[1], self.x + way[0]))
-        if not self.world.matrix[new_pos[0], new_pos[1]]:
-            self.y, self.x = new_pos
-            self.world.move_cell(old_pos, new_pos)
+        new_pos = self.correct_pos((self.y - self.way[1], self.x + self.way[0]))
+        try:
+            if not self.world.matrix[new_pos[0], new_pos[1]]:
+                self.y, self.x = new_pos
+                self.world.move_cell(old_pos, new_pos)
+        except IndexError as error:
+            print(error, self.way, old_pos, new_pos)
 
     def create_new_cell(self):
         variats, result = self.cells_around(), []
