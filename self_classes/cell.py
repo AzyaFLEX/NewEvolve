@@ -2,6 +2,7 @@ from self_classes.board import Board
 from random import randint, choice
 from math import radians, sin, cos
 from numba import prange, njit
+from debug import *
 import configparser
 
 
@@ -30,9 +31,13 @@ class Cell:
         self.organic_decomposition_time = get_config_int(self.config, 'organic_decomposition_time')
         self.base_energy = get_config_int(self.config, 'base_energy')
 
+        """[self.world and other that connected with world]"""
+        self.world = world
+        self.max_x = self.world.cells_x
+        self.max_y = self.world.cells_y
+
         """[self.cell main params]"""
         self.id = id
-        self.world = world
         self.x, self.y = x, y
         self.way = tuple([choice((-1, 1)) for _ in range(2)])
         self.alive = True
@@ -46,7 +51,7 @@ class Cell:
         """[self.cell code dict]"""
         self.the_dict_of_life = {
             0: 'self.photosynthesis()',
-            1: 'self.eat(with_way=False)',
+            1: 'self.eat()',
             2: 'self.eat()',
             3: 'self.move()',
             4: 'self.change_way()',
@@ -58,14 +63,19 @@ class Cell:
             10: 'self.eat_organic()',
             11: 'self.is_organic_near()',
             12: 'self.is_organic_near(reverse=True)',
+            14: 'self.eat()',
+            15: 'self.eat(with_way=False)',
+            16: 'self.look_at_sun()',
+            17: 'look_at_energy()'
         }
 
         self.code_for_death = find_by_key(self.the_dict_of_life, 'self.move()')
 
     def __str__(self):
         return f'''{"Cell" if self.alive else "Organic"} with coords {self.y, self.x}
-        Way: {self.way}
-        Code: {self.code}'''
+Energy: {self.energy}
+Way: {self.way}
+Code: {self.code}'''
 
     def __repr__(self):
         return f'[{self.id}]'
@@ -78,13 +88,13 @@ class Cell:
         if tuple(data) not in self.world.right_pos:
             y, x = data
             if x < 0:
-                x = self.world.cells_x - 1
-            elif x == self.world.cells_x:
+                x = self.max_x - 1
+            elif x == self.max_x:
                 x = 0
             if y < 0:
                 y = 0
-            elif y == self.world.cells_y:
-                y = self.world.cells_y - 1
+            elif y == self.max_y:
+                y = self.max_y - 1
             self.world.right_pos[tuple(data)] = (y, x)
         return self.world.right_pos[tuple(data)]
 
@@ -124,7 +134,7 @@ class Cell:
 
     def death(self):
         self.alive = False
-        self.way = (0, -1)
+        self.way = (0, 1)
         self.code = [self.code_for_death]
         self.current = 0
         self.energy = 0
@@ -134,7 +144,7 @@ class Cell:
             self.create_new_cell()
             return
         try:
-            if self.alive or self.y != self.world.cells_y - 1:
+            if self.alive or self.y != self.max_y - 1:
                 exec(self.the_dict_of_life[self.code[self.current]])
         except KeyError:
             pass
@@ -149,8 +159,8 @@ class Cell:
             if i >= 0:
                 pre_res = []
                 for j in prange(self.x - 1, self.x + 2):
-                    if i < self.world.cells_y:
-                        pre_res += [[i, j if j < self.world.cells_x else 0]]
+                    if i < self.max_y:
+                        pre_res += [[i, j if j < self.max_x else 0]]
                 result += [pre_res]
         return result
 
@@ -177,19 +187,21 @@ class Cell:
         return variants
 
     def photosynthesis(self):
-        self.energy += self.photosynthesis_energy
+        for i in self.world.season_dict:
+            if i[1] >= self.y >= i[0] and not self.world.season_dict[i][0]:
+                self.energy += self.photosynthesis_energy * self.world.season_dict[i][1]
 
-    def eat(self, with_way=False):
+    def eat(self, with_way=True):
         if not with_way:
             self.energy -= self.move_cost // 4
             around = self.cells_to_eat_around()
             if around:
                 self.energy += self.world.kill(choice(around))
         else:
-            first, second = (self.correct_pos((self.y - self.way[1], self.x + self.way[0])))
+            first, second = (self.correct_pos((self.y + self.way[1], self.x + self.way[0])))
             obj_id = self.world.matrix[first, second]
             if obj_id:
-                self.energy += self.world.kill(first, second)
+                self.energy += self.world.kill((first, second))
 
     def eat_organic(self):
         variants = self.get_organic_near()
@@ -199,7 +211,7 @@ class Cell:
 
     def move(self):
         old_pos = (self.y, self.x)
-        new_pos = self.correct_pos((self.y - self.way[1], self.x + self.way[0]))
+        new_pos = self.correct_pos((self.y + self.way[1], self.x + self.way[0]))
         try:
             if not self.world.matrix[new_pos[0], new_pos[1]]:
                 self.y, self.x = new_pos
@@ -226,3 +238,19 @@ class Cell:
         task = not self.get_organic_near()
         if task if not reverse else not task:
             self.current += 1
+
+    def look_at_sun(self):
+        for i in self.world.season_dict:
+            if i[1] >= self.y >= i[0] and not self.world.season_dict[i][0]:
+                if self.world.season_dict[i][1] < 0.5:
+                    self.current += 1
+
+    def look_at_energy(self):
+        if self.energy < self.base_energy:
+            self.current += 1
+
+    # def place_block(self):
+    #     self.energy -= 200
+    #     first, second = (self.correct_pos((self.y + self.way[1], self.x + self.way[0])))
+    #     if not self.world.matrix[first, second]:
+    #         self.world.matrix[first, second] = -1
