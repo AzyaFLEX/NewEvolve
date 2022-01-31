@@ -42,6 +42,8 @@ class Cell:
         self.way = tuple([choice((-1, 1)) for _ in range(2)])
         self.alive = True
         self.code = code
+        self.color = (0, 0, 0)
+        self.get_color()
 
         """[self.cell resources]"""
         self.energy = self.base_energy
@@ -82,6 +84,20 @@ Code: {self.code}'''
 
     def __bool__(self):
         return self.alive
+
+    def get_color(self):
+        if not self.alive:
+            self.color = (139, 139, 139)
+        else:
+            len_code = len(self.code)
+            r = 0
+            for elm in self.code:
+                r += 1 if elm in {1, 2, 14, 15} else 0
+            r = round(r / len_code * 255)
+            g = round(self.code.count(0) / len_code * 255)
+            b = 0
+            r, g, b = (255, 255, 255) if not r + g + b else (r, g, b)
+            self.color = (r, g, b)
 
     # The basic principle of moving cells on my board
     def correct_pos(self, data):
@@ -135,6 +151,7 @@ Code: {self.code}'''
     def death(self):
         self.alive = False
         self.way = (0, 1)
+        self.get_color()
         self.code = [self.code_for_death]
         self.current = 0
         self.energy = 0

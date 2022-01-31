@@ -50,25 +50,6 @@ class Board:
     def get_id(self, x):
         return self.matrix[x[0], x[1]]
 
-    def get_color(self, id):
-        try:
-            obj = self.object_dict[id]
-        except KeyError as error:
-            print(error, self.object_dict)
-            return
-        if obj is not None and not obj:
-            return 139, 139, 139
-        else:
-            len_code = len(obj.code)
-            r = 0
-            for elm in range(9, 18):
-                r += obj.code.count(elm)
-            r = round(r / len_code * 255)
-            g = round(obj.code.count(0) / len_code * 255)
-            b = 0
-            r, g, b = (255, 255, 255) if not r + g + b else (r, g, b)
-            return r, g, b
-
     def update(self):
         _dict = self.object_dict.copy()
         for key in _dict:
@@ -80,12 +61,11 @@ class Board:
     def render(self, screen):
         screen.fill((0, 0, 0))
         matrix = self.matrix[:]
-        get_color = self.get_color
         cell_size = self.cell_size
         for y in prange(self.cells_y):
             for x in prange(self.cells_x):
                 if matrix[y, x]:
-                    pygame.draw.rect(screen, get_color(matrix[y, x]),
+                    pygame.draw.rect(screen, self.object_dict[matrix[y, x]].color,
                                      (x * cell_size, y * cell_size,
                                       cell_size, cell_size))
                     if self.is_way_showing:
